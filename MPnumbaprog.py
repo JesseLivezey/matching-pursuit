@@ -3,29 +3,43 @@ import numpy as np
 from numbapro import cuda
 import numbapro.cudalib.cublas as cublas
 from numba import *
+import math
 
-@cuda.jit('void(f4[:,:],f4[:,:])')
-def cudaABS(stim,output):
-    i,j = cuda.grid(2)
-    output[i,j] = abs(stim[i,j])
-
-@cuda.jit('void(f4[:,:],i4[:,:],i4)')
-def removeWinners(curCoef,winners,k):
+@cuda.jit('void(f4[:,:],i8[:,:],i8)')
+def removeWinners(curCoef,winners,jj):
     i = cuda.grid(1)
-    curCoef[winners[k,i]] = 0.
+    for k in xrange(jj-1):
+        curCoef[winners[k,i]] = 0.
 
-@cuda.jit('void(f4[:,:],f4[:,:],i4[:,:],i4,i4)')
-def maxCoefs(curCoefs,coefs,winners,k,maxLoc):
+@cuda.jit('void(f4[:,:],f4[:,:],f4[:,:],i8[:,:],i8)')
+def maxCoefs(curCoefs,coefs,coefsd,winners,k):
     i = cuda.grid(1)
     #This is not a great idea. Does cuda do inf? What is largest negative numer?
-    maxVal = -10000.
+    maxVal = curCoefs[i,0]
+    maxLoc = i-i
     length = curCoefs.shape[1]
     for jj in xrange(length):
-        if curCoefs[i,jj] >= maxVal:
+        if curCoefs[i,jj] > maxVal:
             maxVal = curCoefs[i,jj]
             maxLoc = jj
     winners[k,i] = maxLoc
     coefs[i,maxLoc] = maxVal
+    coefsd[i,maxLoc] = maxVal
+
+@cuda.jit('void(f4[:,:],f4[:,:],f4[:,:],i8[:,:],i8)')
+def maxCoefsABS(curCoefs,coefs,coefsd,winners,k):
+    i = cuda.grid(1)
+    #This is not a great idea. Does cuda do inf? What is largest negative numer?
+    maxVal = math.fabs(curCoefs[i,0])
+    maxLoc = i-i
+    length = curCoefs.shape[1]
+    for jj in xrange(length):
+        if math.fabs(curCoefs[i,jj]) > maxVal:
+            maxVal = math.fabs(curCoefs[i,jj])
+            maxLoc = jj
+    winners[k,i] = maxLoc
+    coefs[i,maxLoc] = curCoefs[i,maxLoc]
+    coefsd[i,maxLoc] = curCoefs[i,maxLoc]
 
 def mp(dictionary,stimuli,k=None,minabs=None,posOnly=None):
     """
@@ -56,39 +70,41 @@ def mp(dictionary,stimuli,k=None,minabs=None,posOnly=None):
     assert k <= numDict
     #Setup variables on GPU
     d_coefs = cuda.to_device(np.zeros(shape=(numStim,numDict),dtype=np.float32,order='F'))
-    d_win = cuda.to_device(np.zeros(shape=(k,numStim),dtype=np.float32,order='F'))
     d_curCoef = cuda.to_device(np.zeros(shape=(numStim,numDict),dtype=np.float32,order='F'))
-    d_coefABS = cuda.to_device(np.zeros(shape=(numStim,numDict),dtype=np.float32,order='F'))
-    d_winners = cuda.to_device(np.zeros(shape=(k,numStim),dtype=np.int32,order='F'))
+    d_coefsd = cuda.to_device(np.zeros(shape=(numStim,numDict),dtype=np.float32,order='F'))
+    d_winners = cuda.to_device(np.zeros(shape=(k,numStim),dtype=np.int64,order='F'))
     d_delta = cuda.to_device(np.zeros_like(stimuli,dtype=np.float32,order='F'))
     d_coefsd = cuda.to_device(np.zeros(shape=(numStim,numDict),dtype=np.float32,order='F'))
     #Move args to GPU
     d_stim = cuda.to_device(np.array(stimuli,dtype=np.float32,order='F'))
-    d_abs = cuda.to_device(np.zeros_like(stimuli,dtype=np.float32,order='F'))
+    d_stimt = cuda.to_device(np.zeros_like(stimuli,dtype=np.float32,order='F'))
     d_dict = cuda.to_device(np.array(dictionary,dtype=np.float32,order='F'))
 
     griddim1 = 32
     griddim2 = (32,32)
     assert numStim % 32 ==0 and dataLength % 32 == 0 and numDict % 32 == 0 
-    blockdimmax = int(numStim/griddim1)
+    blockdimstim = int(numStim/griddim1)
     blockdim2 = (int(numStim/griddim2[0]),int(dataLength/griddim2[1]))
     blockdimcoef = (int(numStim/griddim2[0]),int(numDict/griddim2[1])) 
 
     for ii in xrange(k):
-        if minabs >= np.mean(np.absolute(d_abs.copy_to_host())):
+        if minabs >= np.mean(np.absolute(d_stim.copy_to_host())):
             break
         bs.gemm('N','T',numStim,numDict,dataLength,1.,d_stim,d_dict,0.,d_curCoef)
         if ii != 0:
-            for jj in xrange(ii-1):
-                removeWinners[griddim1,blockdimmax](d_curCoef,d_winners)
+            removeWinners[griddim1,blockdimstim](d_curCoef,d_winners,ii)
         if posOnly:
-            maxCoef[griddim1,blockdimmax](d_curCoef,d_coefs,d_winners,ii,0)
+            maxCoefs[griddim1,blockdimstim](d_curCoef,d_coefs,d_coefsd,d_winners,ii,0)
         else:
-            cudaABS[griddim2,blockdimcoef](d_curCoef,d_coefABS)
-            maxCoefs[griddim1,blockdimmax](d_coefABS,d_coefs,d_winners,ii,0)
+            maxCoefsABS[griddim1,blockdimstim](d_curCoef,d_coefs,d_coefsd,d_winners,ii,0)
         bs.gemm('N','N',numStim,dataLength,numDict,1.,d_coefsd,d_dict,0.,d_delta)
+        d_coefsd = cuda.to_device(np.zeros(shape=(numStim,numDict),dtype=np.float32,order='F'))
         bs.geam('N','N',numStim,dataLength,1.,d_stim,-1.,d_delta,d_stimt)
         bs.geam('N','N',numStim,dataLength,1.,d_stimt,0.,d_delta,d_stim)
+        print 'stim'
+        print d_stim.copy_to_host()
+        print 'delta'
+        print d_delta.copy_to_host()
     return d_coefs.copy_to_host()
 
         
