@@ -9,29 +9,14 @@ import math
 def removeWinners(curCoef,winners,jj):
     i = cuda.grid(1)
     for k in xrange(jj-1):
-        curCoef[winners[k,i]] = 0.
-
-@cuda.jit('void(f4[:,:],f4[:,:],f4[:,:],i8[:,:],i8)')
-def maxCoefs(curCoefs,coefs,coefsd,winners,k):
-    i = cuda.grid(1)
-    #This is not a great idea. Does cuda do inf? What is largest negative numer?
-    maxVal = curCoefs[i,0]
-    maxLoc = i-i
-    length = curCoefs.shape[1]
-    for jj in xrange(length):
-        if curCoefs[i,jj] > maxVal:
-            maxVal = curCoefs[i,jj]
-            maxLoc = jj
-    winners[k,i] = maxLoc
-    coefs[i,maxLoc] = maxVal
-    coefsd[i,maxLoc] = maxVal
+        curCoef[i,winners[k,i]] = 0.
 
 @cuda.jit('void(f4[:,:],f4[:,:],f4[:,:],i8[:,:],i8)')
 def maxCoefsABS(curCoefs,coefs,coefsd,winners,k):
     i = cuda.grid(1)
-    #This is not a great idea. Does cuda do inf? What is largest negative numer?
-    maxVal = math.fabs(curCoefs[i,0])
-    maxLoc = i-i
+    #This is not a great idea. Does cuda do inf? What is largest negative number?
+    maxVal = -1.
+    maxLoc = -i
     length = curCoefs.shape[1]
     for jj in xrange(length):
         if math.fabs(curCoefs[i,jj]) > maxVal:
@@ -41,7 +26,7 @@ def maxCoefsABS(curCoefs,coefs,coefsd,winners,k):
     coefs[i,maxLoc] = curCoefs[i,maxLoc]
     coefsd[i,maxLoc] = curCoefs[i,maxLoc]
 
-def mp(dictionary,stimuli,k=None,minabs=None,posOnly=None):
+def mp(dictionary,stimuli,k=None,minabs=None):
     """
     Does matching pursuit on a batch of stimuli.
 
@@ -50,7 +35,6 @@ def mp(dictionary,stimuli,k=None,minabs=None,posOnly=None):
         stimuli: Stimulus batch for matching pursuit. First axis should be stimulus number.
         k: Sparseness constraint. k dictionary elements will be used to represent stimuli.
         minabs: Minimum absolute value of the remaining signal to continue projection. If nothing is given, minabs is set to zero and k basis elements will be used.
-        posOnly: If True, only positive coefficients will be used for representing signal.
 
     Returns:
         coeffs: List of dictionary element coefficients to be used for each stimulus.
@@ -59,8 +43,6 @@ def mp(dictionary,stimuli,k=None,minabs=None,posOnly=None):
         k = dictionary.shape[0]
     if minabs is None:
         minabs = 0.
-    if posOnly is None:
-        posOnly = False
 
     bs = cublas.Blas()
 
@@ -91,20 +73,19 @@ def mp(dictionary,stimuli,k=None,minabs=None,posOnly=None):
         if minabs >= np.mean(np.absolute(d_stim.copy_to_host())):
             break
         bs.gemm('N','T',numStim,numDict,dataLength,1.,d_stim,d_dict,0.,d_curCoef)
-        if ii != 0:
+        if ii > 0:
             removeWinners[griddim1,blockdimstim](d_curCoef,d_winners,ii)
-        if posOnly:
-            maxCoefs[griddim1,blockdimstim](d_curCoef,d_coefs,d_coefsd,d_winners,ii,0)
-        else:
-            maxCoefsABS[griddim1,blockdimstim](d_curCoef,d_coefs,d_coefsd,d_winners,ii,0)
+        maxCoefsABS[griddim1,blockdimstim](d_curCoef,d_coefs,d_coefsd,d_winners,ii,0)
+        #print d_winners.copy_to_host()
         bs.gemm('N','N',numStim,dataLength,numDict,1.,d_coefsd,d_dict,0.,d_delta)
-        d_coefsd = cuda.to_device(np.zeros(shape=(numStim,numDict),dtype=np.float32,order='F'))
-        bs.geam('N','N',numStim,dataLength,1.,d_stim,-1.,d_delta,d_stimt)
-        bs.geam('N','N',numStim,dataLength,1.,d_stimt,0.,d_delta,d_stim)
-        print 'stim'
-        print d_stim.copy_to_host()
-        print 'delta'
-        print d_delta.copy_to_host()
+        #print 'delta'
+        #print d_delta.copy_to_host()
+        #d_coefsd = cuda.to_device(np.zeros(shape=(numStim,numDict),dtype=np.float32,order='F'))
+        bs.geam('N','N',numStim,numDict,0.,d_coefsd,0.,d_coefsd,d_coefsd)
+        bs.geam('N','N',numStim,dataLength,1.,d_stim,-1.,d_delta,d_stim)
+        #bs.geam('N','N',numStim,dataLength,1.,d_stimt,0.,d_delta,d_stim)
+        #print 'stim'
+        #print d_stim.copy_to_host()
     return d_coefs.copy_to_host()
 
         

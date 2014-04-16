@@ -17,13 +17,12 @@ def main():
     
     #Setup variables for inference
     numDict = int(9600)
-    numBatch = int(128)
+    numBatch = int(1024)
     dataSize = int(256)
     dictsIn = np.random.randn(numDict,dataSize)
     stimuli = np.random.randn(numBatch,dataSize)
     kin = 32
     minabsin = 0.
-    posOnlyin = False
     
     #MP
     params = """Parameters:
@@ -34,26 +33,26 @@ def main():
     print params
              
     start = timer()
-    mpn.mp(dictsIn,stimuli,k=kin,minabs=minabsin,posOnly=posOnlyin)
+    mpn.mp(dictsIn,stimuli,k=kin,minabs=minabsin)
     dt = timer()-start
     if dt < tshort:
         for ii in xrange(nshort-1):
             start = timer()
-            mpn.mp(dictsIn,stimuli,k=kin,minabs=minabsin,posOnly=posOnlyin)
+            mpn.mp(dictsIn,stimuli,k=kin,minabs=minabsin)
             dt = dt+timer()-start
         num = nshort
         dt = dt/(nshort)
     elif dt < tmed:
         for ii in xrange(nmed-1):
             start = timer()
-            mpn.mp(dictsIn,stimuli,k=kin,minabs=minabsin,posOnly=posOnlyin)
+            mpn.mp(dictsIn,stimuli,k=kin,minabs=minabsin)
             dt = dt+timer()-start
         num = nmed
         dt = dt/(nmed)
     else:
         for ii in xrange(nlong-1):
             start = timer()
-            mpn.mp(dictsIn,stimuli,k=kin,minabs=minabsin,posOnly=posOnlyin)
+            mpn.mp(dictsIn,stimuli,k=kin,minabs=minabsin)
             dt = dt+timer()-start
         num = nlong
         dt = dt/(nlong)
@@ -62,26 +61,26 @@ def main():
     print '%f s' % dt
 
     start = timer()
-    mpg.mp(dictsIn,stimuli,k=kin,minabs=minabsin,posOnly=posOnlyin)
+    mpg.mp(dictsIn,stimuli,k=kin,minabs=minabsin)
     dt = timer()-start
     if dt < tshort:
         for ii in xrange(nshort-1):
             start = timer()
-            mpg.mp(dictsIn,stimuli,k=kin,minabs=minabsin,posOnly=posOnlyin)
+            mpg.mp(dictsIn,stimuli,k=kin,minabs=minabsin)
             dt = dt+timer()-start
         num = nshort
         dt = dt/(nshort)
     elif dt < tmed:
         for ii in xrange(nmed-1):
             start = timer()
-            mpg.mp(dictsIn,stimuli,k=kin,minabs=minabsin,posOnly=posOnlyin)
+            mpg.mp(dictsIn,stimuli,k=kin,minabs=minabsin)
             dt = dt+timer()-start
         num = nmed
         dt = dt/(nmed)
     else:
         for ii in xrange(nlong-1):
             start = timer()
-            mpg.mp(dictsIn,stimuli,k=kin,minabs=minabsin,posOnly=posOnlyin)
+            mpg.mp(dictsIn,stimuli,k=kin,minabs=minabsin)
             dt = dt+timer()-start
         num = nlong
         dt = dt/(nlong)

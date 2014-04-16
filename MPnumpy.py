@@ -1,7 +1,7 @@
 from __future__ import division
 import numpy as np
 
-def mp(dictionary,stimuli,k=None,minabs=None,posOnly=None):
+def mp(dictionary,stimuli,k=None,minabs=None):
     """
     Does matching pursuit on a batch of stimuli.
 
@@ -10,7 +10,6 @@ def mp(dictionary,stimuli,k=None,minabs=None,posOnly=None):
         stimuli: Stimulus batch for matching pursuit. First axis should be stimulus number.
         k: Sparseness constraint. k dictionary elements will be used to represent stimuli.
         minabs: Minimum absolute value of the remaining signal to continue projection. If nothing is given, minabs is set to zero and k basis elements will be used.
-        posOnly: If True, only positive coefficients will be used for representing signal.
 
     Returns
         coeffs: List of dictionary element coefficients to be used for each stimulus.
@@ -19,8 +18,6 @@ def mp(dictionary,stimuli,k=None,minabs=None,posOnly=None):
         k = dictionary.shape[0]
     if minabs is None:
         minabs = 0.
-    if posOnly is None:
-        posOnly = False
         
     numDict = dictionary.shape[0]
     numStim = stimuli.shape[0]
@@ -38,14 +35,12 @@ def mp(dictionary,stimuli,k=None,minabs=None,posOnly=None):
         if ii != 0:
             for jj in xrange(ii-1):
                 curCoef[stimn,winners[jj].astype(np.int)] = 0.
-        if posOnly:
-            dictn = np.argmax(curCoef,axis=1)
-        else:
-            dictn = np.argmax(np.absolute(curCoef),axis=1)
+        dictn = np.argmax(np.absolute(curCoef),axis=1)
         winners[ii] = dictn
         coefsd = np.zeros_like(coefs)
         coefsd[stimn,dictn] = curCoef[stimn,dictn]
         coefs[stimn,dictn] = curCoef[stimn,dictn]
         delta = np.dot(coefsd,dictionary)
         stim = stim-delta
+
     return coefs
