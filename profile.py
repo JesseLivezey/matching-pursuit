@@ -20,6 +20,7 @@ def main():
     numBatch = int(1024)
     dataSize = int(256)
     dictsIn = np.random.randn(numDict,dataSize)
+    dictsIn = (np.sqrt(np.diag(1/np.diag(dictsIn.dot(dictsIn.T))))).dot(dictsIn)
     stimuli = np.random.randn(numBatch,dataSize)
     kin = 32
     minabsin = 0.
