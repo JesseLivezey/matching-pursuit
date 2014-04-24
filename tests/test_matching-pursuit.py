@@ -15,8 +15,8 @@ class test_mp():
     def setup(self):
         self.rng = np.random.RandomState(0)
         self.numDict = 4096
-        self.numBatch = 64
-        self.dataSize = 64
+        self.numBatch = 32
+        self.dataSize = 32
 
     def teardown(self):
         pass
