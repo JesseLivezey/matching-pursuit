@@ -7,7 +7,7 @@ import MPnumpy as mpn
 import MPnumbaprog as mpg
 
 def main():
-    """Profiles various versions of Matching Pursuit."""
+    """Times various versions of Matching Pursuit."""
 
     nshort = 6
     tshort = 2
